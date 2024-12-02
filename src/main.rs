@@ -6,7 +6,7 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 async fn handle_request(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
     let response = Response::builder()
         .status(StatusCode::OK)
-        .body(Body::from("Hello, Rust HTTP Server!"))
+        .body(Body::from("Hello, Rust HTTP Server with Hyper v0.14!"))
         .unwrap();
     Ok(response)
 }
