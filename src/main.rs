@@ -1,18 +1,18 @@
-use std::convert::Infallible;
-use std::net::SocketAddr;
-
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Request, Response, StatusCode};
+use hyper::{body::Incoming as IncomingBody, Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-async fn handle_request(
-    _req: Request<hyper::body::Incoming>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
-    let body = Full::new(Bytes::from("Hello, Rust HTTP Server with v1.5!"));
+type GenericError = Box<dyn std::error::Error + Send + Sync>;
+type Result<T> = std::result::Result<T, GenericError>;
+type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
+
+async fn index_response() -> Result<Response<BoxBody>> {
+    let body = full(Bytes::from("Hello, Rust HTTP Server with v1.5!"));
     let response = Response::builder()
         .status(StatusCode::OK)
         .body(body)
@@ -20,8 +20,30 @@ async fn handle_request(
     Ok(response)
 }
 
+async fn not_found_response() -> Result<Response<BoxBody>> {
+    let response = Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(full("Not found!"))
+        .unwrap();
+    Ok(response)
+}
+
+async fn handle_request(req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
+    println!("{:?} {:?}", req.method().as_str(), req.uri());
+    match (req.method(), req.uri().path()) {
+        (&Method::GET, "/") | (&Method::GET, "/index.html") => index_response().await,
+        _ => not_found_response().await,
+    }
+}
+
+fn full<T: Into<Bytes>>(chunk: T) -> BoxBody {
+    Full::new(chunk.into())
+        .map_err(|never| match never {})
+        .boxed()
+}
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<()> {
     let address = SocketAddr::from(([127, 0, 0, 1], 8080));
     let listener = TcpListener::bind(address).await?;
 
